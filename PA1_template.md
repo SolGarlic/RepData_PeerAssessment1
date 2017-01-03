@@ -10,7 +10,6 @@ if (!file.exists(temp)){
     download.file(fileURL, temp)
     }
 step <- read.csv(unz(temp, "activity.csv"))
-unlink(temp)
 
 str(step)
 ```

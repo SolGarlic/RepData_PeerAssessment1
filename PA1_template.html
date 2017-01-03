@@ -129,7 +129,6 @@ if (!file.exists(temp)){
     download.file(fileURL, temp)
     }
 step &lt;- read.csv(unz(temp, &quot;activity.csv&quot;))
-unlink(temp)
 
 str(step)</code></pre>
 <pre><code>## 'data.frame':    17568 obs. of  3 variables:
