@@ -5,21 +5,150 @@ output:
     keep_md: true
 ---
 
+## Part 1 - Loading and preprocessing the data
+First read the data and take a look at it:
+```{r}
+temp <- tempfile()
+fileURL <- "https://d396qusza40orc.cloudfront.net/repdata/data/activity.zip"
+download.file(fileURL, temp)
+step <- read.csv(unz(temp, "activity.csv"))
+unlink(temp)
 
-## Loading and preprocessing the data
+str(step)
+```
+And then tidy it up (transform minutes in 4 digit string, create date+time column, and subset only the needed data):
+```{r}
+step2 <- transform(
+      step, starttime=as.POSIXct(paste(step$date, sprintf("%04d",                                                       step$interval)),
+                                       format="%Y-%m-%d %H%M"))[,c(4,1)]
+str(step2)
+```
 
 
+## Part 2 - What is mean total number of steps taken per day?
 
-## What is mean total number of steps taken per day?
+Using the original step data we can calculate the total number of steps taken each day using the summarise function (from dplyr package):
+```{r, include=FALSE}
+library(dplyr)
+```
+```{r}
+s1 <- step %>%
+      group_by(date) %>%
+      summarize( stepday = sum(steps, na.rm=T))
+```
 
+And plot a simple histogram:
 
+```{r summary}
+hist(s1$stepday)
+```
 
-## What is the average daily activity pattern?
+And also calculate the mean and median:
 
+```{r}
+paste("Mean = ",mean(s1$stepday), "and Median = ", median(s1$stepday))
+```
+## Part 3 - What is the average daily activity pattern?
+In order to make the time series we will:  
+*Factor the interval  
+*Group by interval  
+*Summarize creating the mean  
+```{r}
+s2 <- step %>%
+      group_by(interval) %>%
+      summarize( stepinterval = mean(steps, na.rm=T))
+```
 
+And then create the plot
+```{r}
+with(s2, plot(interval,stepinterval, type="l"))
+```
 
-## Imputing missing values
+Now to find the interval with the maximum:
+```{r}
+s2[which.max(s2$stepinterval),]
+```
 
+## Part 4 - Imputing missing values
 
+All the NA values are in the variable steps, and the total number of incomplete observations is:
+```{r}
+sum(!complete.cases(step))
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+Now we will fill the NA values with the mean for that interval for the remaining days, and store it in a new data frame stepNNA
+```{r}
+stepNNA <- step
+for (i in 1:length(stepNNA$steps)) {
+   if(is.na(stepNNA$steps[i])) {
+         stepNNA$steps[i] <- as.numeric(s2[s2$interval==step$interval[i],2])
+   }   
+}    
+```
+Now to have again the daily average for the corrected data:
+```{r}
+s3 <- stepNNA %>%
+      group_by(date) %>%
+      summarize( stepday = sum(steps, na.rm=T))
+```
+
+Again plot a simple histogram:
+
+```{r}
+hist(s3$stepday)
+```
+
+And also calculate the mean and median:
+
+```{r}
+paste("Mean withoun NA= ",mean(s3$stepday), "and Median withoun NA= ", median(s3$stepday))
+```
+
+## Part 5 - Are there differences in activity patterns between weekdays and weekends?
+
+As I live in a different locale, I will first create the match pattern based on a date:
+
+```{r}
+match <- c(weekdays(strptime("1975-12-6","%Y-%m-%d"),TRUE),
+           weekdays(strptime("1975-12-7","%Y-%m-%d"),TRUE)) # saturday and sunday
+```
+
+Then, create the column with weekday/weekend in stepNNA:
+
+```{r}
+weekday <-  weekdays(strptime(stepNNA$date,"%Y-%m-%d"),TRUE)
+weekday[!(weekday %in% match)] <- "weekday"
+weekday[weekday %in% match] <- "weekend"
+stepNNA <- data.frame(stepNNA,factor(weekday))
+str(stepNNA)
+```
+
+The only thing missing is the data for the plot:
+
+```{r}
+s4 <- stepNNA %>%
+      group_by(interval, factor.weekday.) %>%
+      summarize( stepinterval = mean(steps, na.rm=T))
+```
+
+And then create the plot
+
+```{r}
+par(mfrow=c(2,1), mar=c(0,0,0,0), oma=c(4, 4, 2.5, 2))
+with(s4[s4$factor.weekday.=="weekday",],
+     plot(interval,stepinterval, type="l", yaxt='n', xaxt='n', ylim = c(0, 200)))
+axis(4)
+legend("topleft", legend = c("Weekdays"), bty = "n", 
+                         pt.cex = 2, cex = 1, horiz = F)
+with(s4[s4$factor.weekday.=="weekend",],
+     plot(interval,stepinterval, type="l", ylim = c(0, 200)))
+legend("topleft", legend = c("Weekends"), bty = "n", 
+                         pt.cex = 2, cex = 1, horiz = F)
+mtext("Steps per interval in weekdays and weekends",
+      side = 3, outer = TRUE, cex = 1, line = 0.3,col = "grey20")
+mtext("Intervals", side = 1, outer = TRUE, cex = 1, line = 2.2,col = "grey20")
+mtext("Steps per 5 min interval", side = 2, outer = TRUE, cex = 1, line = 2.2,col = "grey20")
+
+```
+
+We can see that during weekdays the activity begins earlier and is more intense until 10:00, but then it becomes lighter and ends earlier than on Weekends.
